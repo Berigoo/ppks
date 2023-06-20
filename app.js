@@ -30,14 +30,6 @@ var iswwclientConnect = false;
 wwclient.on('qr', (qr)=>{
    qrcode.generate(qr, {small: true});
 });
-
-wwclient.on('authenticated', () => {
-    console.log('Authenticated!');
-});
-  
-wwclient.on('auth_failure', (msg) => {
-    console.error('Authentication Failure!', msg);
-});
   
 wwclient.on('ready', ()=>{
     iswwclientConnect = true;
