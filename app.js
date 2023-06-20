@@ -30,36 +30,55 @@ app.use(bodyparser.urlencoded({'extended': false}))
 
 app.post('/api/otp', (req, res) => {
     if(iswwclientConnect) {
-        res.setHeader('Content-Type', 'application/json');
-        pool.getConnection().then((conn) => {
-            var otp = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
-            conn.query('UPDATE user SET otp= ?, ts= CURRENT_TIMESTAMP WHERE id= ?', [otp, req.body.id]).then(()=> {
-                return conn.query("SELECT phone FROM user WHERE id=?", req.body.id);
-            }).then((rows)=>{
-                if (rows[0].phone !== undefined) {
-                    const sanitized_number = rows[0].phone.toString().replace(/[- )(]/g, "");
+        if(req.body.id) {
+            res.setHeader('Content-Type', 'application/json');
+            pool.getConnection().then((conn) => {
+                var otp = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
+                if (req.body.phone) {
+                    const sanitized_number = req.body.phone.toString().replace(/[- )(]/g, "");
                     const numberId = wwclient.getNumberId(sanitized_number).then((id) => {
-                        var msg = otp + " Adalah kode konfirmasi Anda.";
-                        var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
+                        if (id) {
+                            var msg = otp + " Adalah kode konfirmasi Anda.";
+                            var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
+                                conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, CURRENT_TIMESTAMP)", [req.body.id, req.body.phone, otp]).then(() => {
+                                    res.json({
+                                        'isAccepted': true,
+                                        'info': "Message has been sent",
+                                        'status-code': 1
+                                    });
+                                    conn.end();
+                                }).catch(err => {
+                                    res.json({
+                                        'isAccepted': false,
+                                        'info': "Could not send message",
+                                        'status-code': -2
+                                    })
+                                });
+                            });
+                        } else {
                             res.json({
-                                'isAccepted': true,
-                                'info': "Message has been sent",
-                                'status-code': 1
-                            })
+                                'isAccepted': false,
+                                'info': "Number not Registered",
+                                'status-code': -1
+                            });
                             conn.end();
-                        });
+                        }
                     });
                 } else {
-                    console.log("Number not registered!");
                     res.json({
                         'isAccepted': false,
-                        'info': "Number not registered",
-                        'status-code': -1
-                    });
-                    conn.end();
+                        'info': "Phone number not initialized",
+                        'status-code': -5
+                    })
                 }
             });
-        });
+        }else{
+            res.json({
+                'isAccepted': false,
+                'info': "Id not initialized",
+                'status-code': -6
+            })
+        }
     } else {
         console.log("wwclient unconnected");
         res.sendStatus(500);
@@ -68,50 +87,57 @@ app.post('/api/otp', (req, res) => {
 app.post('/api/otpverify', (req, res)=>{
     if(iswwclientConnect){
         var ret = {};
-        res.setHeader('Content-Type', 'application/json');
-        pool.getConnection().then((conn)=>{
-            conn.query("SELECT COUNT(1), id, ts FROM user WHERE otp= ?", req.body.otp).then((rows)=>{
-                if(rows[0].id !== null){
-                    // const delta = deltaTs(conn, rows[0].id);
-                    if(/*delta < 300*/true){
-                        return conn.query("UPDATE user SET otp='-', isVerified= 1 WHERE id=?", rows[0].id)
-                    }else{
+        if(req.body.id && req.body.otp) {
+            res.setHeader('Content-Type', 'application/json');
+            pool.getConnection().then((conn) => {
+                conn.query("SELECT COUNT(1), id FROM user WHERE otp= ? ORDER BY ts DESC", req.body.otp).then((rows) => {
+                    if (rows[0].id !== null) {
+                        // const delta = deltaTs(conn, rows[0].id);
+                        if (/*delta < 300*/true) {
+                            return conn.query("UPDATE user SET otp='-' WHERE id=?", rows[0].id)
+                        } else {
                             /*ret.isAccepted = false;
                             ret.info = "User otp has been expired";
                             ret.statusCode = 3
                         conn.end();*/
+                        }
+                    } else {
+                        ret.isAccepted = false;
+                        ret.info = "Otp not match or id not found";
+                        ret.statusCode = -3
+                        conn.end();
                     }
-                }else{
-                    ret.isAccepted= false;
-                    ret.info = "Otp not match";
-                    ret.statusCode = 4
-                    conn.end();
-                }
-            }).then((rows)=>{
-                console.log(rows)
-                if(rows) {
-                    ret.isAccepted= true;
-                    ret.info = "User has been verified";
-                    ret.statusCode =2
-                    conn.end();
-                }
-            }).then(()=>{
-                res.json({
-                    "isAccepted": ret.isAccepted,
-                    "info": ret.info,
-                    "status-code": ret.statusCode
-                })
-            }).catch(err =>{
-                console.log(err);
-                conn.end().then(()=>{
+                }).then((rows) => {
+                    if (rows) {
+                        ret.isAccepted = true;
+                        ret.info = "User has been verified";
+                        ret.statusCode = 2
+                        conn.end();
+                    }
+                }).then(() => {
                     res.json({
-                        "isAccepted": false,
-                        "info": "Could not verify",
-                        "status-code": -2
+                        "isAccepted": ret.isAccepted,
+                        "info": ret.info,
+                        "status-code": ret.statusCode
                     })
-                });
+                }).catch(err => {
+                    console.log(err);
+                    conn.end().then(() => {
+                        res.json({
+                            "isAccepted": false,
+                            "info": "Could not verify",
+                            "status-code": -4
+                        })
+                    });
+                })
+            });
+        }else{
+            res.json({
+                "isAccepted": false,
+                "info": "id or otp not initialized",
+                "status-code": -7
             })
-        });
+        }
 
     }else{
         console.log("wwclient unconnected");
