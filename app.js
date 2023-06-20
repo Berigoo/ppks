@@ -72,15 +72,14 @@ app.post('/api/otpverify', (req, res)=>{
         pool.getConnection().then((conn)=>{
             conn.query("SELECT COUNT(1), id, ts FROM user WHERE otp= ?", req.body.otp).then((rows)=>{
                 if(rows[0].id !== null){
-                    const delta = deltaTs(conn, rows[0].id);
-                    console.log(delta);
-                    if(delta < 300){
+                    // const delta = deltaTs(conn, rows[0].id);
+                    if(/*delta < 300*/true){
                         return conn.query("UPDATE user SET otp='-', isVerified= 1 WHERE id=?", rows[0].id)
                     }else{
-                            ret.isAccepted = false;
+                            /*ret.isAccepted = false;
                             ret.info = "User otp has been expired";
                             ret.statusCode = 3
-                        conn.end();
+                        conn.end();*/
                     }
                 }else{
                     ret.isAccepted= false;
@@ -102,18 +101,16 @@ app.post('/api/otpverify', (req, res)=>{
                     "info": ret.info,
                     "status-code": ret.statusCode
                 })
+            }).catch(err =>{
+                console.log(err);
+                conn.end().then(()=>{
+                    res.json({
+                        "isAccepted": false,
+                        "info": "Could not verify",
+                        "status-code": -2
+                    })
+                });
             })
-            //     .catch(err =>{
-            //     console.log(err);
-            //     conn.end().then(()=>{
-            //         res.json({
-            //             "isAccepted": false,
-            //             "info": "Could not verify",
-            //             "status-code": -2
-            //         })
-            //         return;
-            //     });
-            // })
         });
 
     }else{
@@ -130,6 +127,7 @@ wwclient.on('disconnected', ()=>{
 wwclient.initialize();
 app.listen(8001);
 
+/*
 function deltaTs(connection, id){       //Problem
     var delta = 0;
     var time = new Date();
@@ -146,4 +144,4 @@ function deltaTs(connection, id){       //Problem
         }
     });
     return delta;
-}
+}*/
