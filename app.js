@@ -6,12 +6,17 @@ const url = require('url');
 const bodyparser = require('body-parser');
 const {del} = require("express/lib/application");
 
-const wwclient = new Client();
+const wwclient = new Client({
+	puppeteer: {
+		headless: true,
+		args: ['--no-sandbox']
+	},
+});
 var app = express();
 const pool = mariadb.createPool({
     host: 'localhost',
-    user: 'guest',
-    password: 'p@ssword',
+    user: 'ppks',
+    password: 'chocoL4tt3',
     database: 'ppks_project'
 });
 
@@ -151,7 +156,7 @@ wwclient.on('disconnected', ()=>{
 });
 
 wwclient.initialize();
-app.listen(8001);
+app.listen(8000);
 
 /*
 function deltaTs(connection, id){       //Problem
