@@ -132,3 +132,5 @@ dist
 .wwebjs_cache
 
 .idea
+
+sessions

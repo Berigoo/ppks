@@ -1,17 +1,28 @@
 const express = require('express');
-const { Client } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const mariadb = require('mariadb');
 const url = require('url');
 const bodyparser = require('body-parser');
 const {del} = require("express/lib/application");
 
-const wwclient = new Client();
+const wwclient = new Client({
+    // save session to local
+    authStrategy: new LocalAuth({
+        clientId: 'client',
+        dataPath: './sessions',
+      }),
+	puppeteer: {
+		headless: true,
+		args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions']
+	},
+});
+
 var app = express();
 const pool = mariadb.createPool({
     host: 'localhost',
-    user: 'guest',
-    password: 'p@ssword',
+    user: 'ppks',
+    password: 'chocoL4tt3',
     database: 'ppks_project'
 });
 
@@ -19,10 +30,10 @@ var iswwclientConnect = false;
 wwclient.on('qr', (qr)=>{
    qrcode.generate(qr, {small: true});
 });
-
+  
 wwclient.on('ready', ()=>{
     iswwclientConnect = true;
-    console.log("client connect");
+    console.log("client connected");
 });
 
 app.use(bodyparser.json())
@@ -151,7 +162,7 @@ wwclient.on('disconnected', ()=>{
 });
 
 wwclient.initialize();
-app.listen(8001);
+app.listen(8000);
 
 /*
 function deltaTs(connection, id){       //Problem
