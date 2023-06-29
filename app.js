@@ -139,7 +139,6 @@ app.post('/api/otpverify', (req, res)=>{
                     }
                 }).then((rows) => {
                     if (rows) {
-                        console.log(rows);
                         ret.isAccepted = true;
                         ret.info = "User has been verified";
                         ret.statusCode = 2
