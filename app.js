@@ -1,10 +1,11 @@
+require('dotenv').config()
+
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const mariadb = require('mariadb');
-const url = require('url');
 const bodyparser = require('body-parser');
-const {del} = require("express/lib/application");
+const jwt = require('jsonwebtoken');
 
 const wwclient = new Client({
     // save session to local
@@ -20,10 +21,10 @@ const wwclient = new Client({
 
 var app = express();
 const pool = mariadb.createPool({
-    host: 'localhost',
-    user: 'ppks',
-    password: 'chocoL4tt3',
-    database: 'ppks_project'
+    host: process.env.HOST_DB,
+    user: process.env.USER_DB,
+    password: process.env.PASS_DB,
+    database: process.env.DB
 });
 
 var iswwclientConnect = false;
@@ -38,6 +39,7 @@ wwclient.on('ready', ()=>{
 
 app.use(bodyparser.json())
 app.use(bodyparser.urlencoded({'extended': false}))
+app.use(express.static('public'))
 
 app.post('/api/otp', (req, res) => {
     if(iswwclientConnect) {
@@ -51,19 +53,33 @@ app.post('/api/otp', (req, res) => {
                         if (id) {
                             var msg = otp + " Adalah kode konfirmasi Anda.";
                             var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
-                                conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, CURRENT_TIMESTAMP)", [req.body.id, req.body.phone, otp]).then(() => {
-                                    res.json({
-                                        'isAccepted': true,
-                                        'info': "Message has been sent",
-                                        'status-code': 1
-                                    });
-                                    conn.end();
-                                }).catch(err => {
-                                    res.json({
-                                        'isAccepted': false,
-                                        'info': "Could not send message",
-                                        'status-code': -2
-                                    })
+                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ? && phone= ?", [req.body.id, req.body.phone]).then((rows) => {
+                                    if (parseInt(rows[0]['COUNT(1)']) > 0) {
+                                        res.json({
+                                            'isAccepted': true,
+                                            'info': "Message has been sent " + otp,
+                                            'status-code': 1
+                                        });
+                                        conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, req.body.phone]).then(()=>{
+                                            conn.end();
+                                        })
+                                    }else {
+                                        conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, req.body.phone, otp]).then(() => {
+                                            res.json({
+                                                'isAccepted': true,
+                                                'info': "Message has been sent " + otp,
+                                                'status-code': 1
+                                            });
+                                            conn.end();
+                                        }).catch(err => {
+                                            console.log(err)
+                                            res.json({
+                                                'isAccepted': false,
+                                                'info': "Could not send message",
+                                                'status-code': -2
+                                            })
+                                        });
+                                    }
                                 });
                             });
                         } else {
@@ -98,19 +114,21 @@ app.post('/api/otp', (req, res) => {
 app.post('/api/otpverify', (req, res)=>{
     if(iswwclientConnect){
         var ret = {};
+        ret.token = '-';
         if(req.body.id && req.body.otp) {
             res.setHeader('Content-Type', 'application/json');
             pool.getConnection().then((conn) => {
-                conn.query("SELECT COUNT(1), id FROM user WHERE otp= ? ORDER BY ts DESC", req.body.otp).then((rows) => {
-                    if (rows[0].id !== null) {
+                conn.query("SELECT * FROM user WHERE otp= ? && device_id= ? ORDER BY ts DESC", [req.body.otp, req.body.id]).then((rows) => {
+                    if (rows[0].device_id !== null) {
                         // const delta = deltaTs(conn, rows[0].id);
-                        if (/*delta < 300*/true) {
-                            return conn.query("UPDATE user SET otp='-' WHERE id=?", rows[0].id)
-                        } else {
-                            /*ret.isAccepted = false;
-                            ret.info = "User otp has been expired";
-                            ret.statusCode = 3
-                        conn.end();*/
+                        if(rows[0].token === null){
+                            const user = { device_id: rows[0].device_id, phone: rows[0].phone };
+                            const token = jwt.sign(user, process.env.TOKEN_SECRET);
+                            ret.token = token;
+                            return conn.query("UPDATE user SET otp='-', state=1, token= ? WHERE device_id=?", [token , rows[0].device_id])
+                        }else {
+                            ret.token = rows[0].token;
+                            return conn.query("UPDATE user SET otp='-', state=1 WHERE device_id=?", rows[0].device_id)
                         }
                     } else {
                         ret.isAccepted = false;
@@ -120,6 +138,7 @@ app.post('/api/otpverify', (req, res)=>{
                     }
                 }).then((rows) => {
                     if (rows) {
+                        console.log(rows);
                         ret.isAccepted = true;
                         ret.info = "User has been verified";
                         ret.statusCode = 2
@@ -129,6 +148,7 @@ app.post('/api/otpverify', (req, res)=>{
                     res.json({
                         "isAccepted": ret.isAccepted,
                         "info": ret.info,
+                        "token": ret.token,
                         "status-code": ret.statusCode
                     })
                 }).catch(err => {
@@ -162,23 +182,4 @@ wwclient.on('disconnected', ()=>{
 });
 
 wwclient.initialize();
-app.listen(8000);
-
-/*
-function deltaTs(connection, id){       //Problem
-    var delta = 0;
-    var time = new Date();
-    const now = [time.getMinutes(), time.getSeconds()];
-    connection.query('SELECT ts FROM user WHERE id= ?', id).then((rows)=>{
-        if(rows[0]){
-            now.forEach((val, i, arr)=>{
-                var t = rows[0].ts;
-                console.log(t);
-                t = parseInt(t);
-                delta += (val - t);
-                if(i === 0) delta *= 60;
-            });
-        }
-    });
-    return delta;
-}*/
+app.listen(process.env.PORT);
