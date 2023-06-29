@@ -24,7 +24,8 @@ const pool = mariadb.createPool({
     host: process.env.HOST_DB,
     user: process.env.USER_DB,
     password: process.env.PASS_DB,
-    database: process.env.DB
+    database: process.env.DB,
+    multipleStatements: false
 });
 
 var iswwclientConnect = false;
@@ -53,7 +54,7 @@ app.post('/api/otp', (req, res) => {
                         if (id) {
                             var msg = otp + " Adalah kode konfirmasi Anda.";
                             var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
-                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ? && phone= ?", [req.body.id, req.body.phone]).then((rows) => {
+                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ?", req.body.id).then((rows) => {
                                     if (parseInt(rows[0]['COUNT(1)']) > 0) {
                                         res.json({
                                             'isAccepted': true,
@@ -119,7 +120,7 @@ app.post('/api/otpverify', (req, res)=>{
             res.setHeader('Content-Type', 'application/json');
             pool.getConnection().then((conn) => {
                 conn.query("SELECT * FROM user WHERE otp= ? && device_id= ? ORDER BY ts DESC", [req.body.otp, req.body.id]).then((rows) => {
-                    if (rows[0].device_id !== null) {
+                    if (rows[0] !== undefined) {
                         // const delta = deltaTs(conn, rows[0].id);
                         if(rows[0].token === null){
                             const user = { device_id: rows[0].device_id, phone: rows[0].phone };
