@@ -1,18 +1,18 @@
-POST http://localhost:8001/api/otpverify
+POST http://localhost:8000/api/otpverify
 Content-Type: application/json
 
 {
-  "id": 3,
-  "otp": "9948"
+  "id": -2,
+  "otp": "5917"
 }
 
 ###
-POST http://localhost:8001/api/otp
+POST http://localhost:8000/api/otp
 Content-Type: application/json
 
 {
-  "id": 3,
-  "phone": "628123456789"
+  "id": -2,
+  "phone": "1234567890"
 }
 
 ###
