@@ -50,7 +50,8 @@ app.post('/api/otp', (req, res) => {
                 var otp = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
                 if (req.body.phone) {
                     const sanitized_number = req.body.phone.toString().replace(/[- )(]/g, "");
-                    const numberId = wwclient.getNumberId(sanitized_number).then((id) => {
+                    const final_number = `62${sanitized_number.substring(sanitized_number.length - 11)}`;
+                    const numberId = wwclient.getNumberId(final_number).then((id) => {
                         if (id) {
                             var msg = otp + " Adalah kode konfirmasi Anda.";
                             var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
@@ -61,7 +62,8 @@ app.post('/api/otp', (req, res) => {
                                             'info': "Message has been sent " + otp,
                                             'status-code': 1
                                         });
-                                        conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, req.body.phone]).then(()=>{
+                                        console.log(final_number)
+                                        conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]).then(()=>{
                                             conn.end();
                                         })
                                     }else {
@@ -116,11 +118,13 @@ app.post('/api/otpverify', (req, res)=>{
     if(iswwclientConnect){
         var ret = {};
         ret.token = '-';
+        ret.phone = '-';
         if(req.body.id && req.body.otp) {
             res.setHeader('Content-Type', 'application/json');
             pool.getConnection().then((conn) => {
                 conn.query("SELECT * FROM user WHERE otp= ? && device_id= ? ORDER BY ts DESC", [req.body.otp, req.body.id]).then((rows) => {
                     if (rows[0] !== undefined) {
+                        ret.phone = rows[0].phone;
                         // const delta = deltaTs(conn, rows[0].id);
                         if(rows[0].token === null){
                             const user = { device_id: rows[0].device_id, phone: rows[0].phone };
@@ -149,6 +153,7 @@ app.post('/api/otpverify', (req, res)=>{
                         "isAccepted": ret.isAccepted,
                         "info": ret.info,
                         "token": ret.token,
+                        "phone": ret.phone,
                         "status-code": ret.statusCode
                     })
                 }).catch(err => {
