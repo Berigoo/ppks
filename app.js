@@ -61,13 +61,10 @@ app.post('/api/otp', (req, res) => {
                                             'isAccepted': true,
                                             'info': "Message has been sent " + otp,
                                             'status-code': 1
-                                        });
-                                        console.log(final_number)
-                                        conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]).then(()=>{
-                                            conn.end();
                                         })
+                                        return conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]);
                                     }else {
-                                        conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, req.body.phone, otp]).then(() => {
+                                        conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, final_number, otp]).then(() => {
                                             res.json({
                                                 'isAccepted': true,
                                                 'info': "Message has been sent " + otp,
@@ -83,8 +80,8 @@ app.post('/api/otp', (req, res) => {
                                             })
                                         });
                                     }
-                                });
-                            });
+                                }).then(()=>{ conn.end() })
+                            }).then(()=>{ conn.end() })
                         } else {
                             res.json({
                                 'isAccepted': false,
