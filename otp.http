@@ -2,8 +2,9 @@ POST http://localhost:8000/api/otpverify
 Content-Type: application/json
 
 {
-  "id": -2,
-  "otp": "5917"
+  "id": -49,
+  "otp": "826044",
+  "phone": "08123456789"
 }
 
 ###
@@ -11,8 +12,8 @@ POST http://localhost:8000/api/otp
 Content-Type: application/json
 
 {
-  "id": -2,
-  "phone": "1234567890"
+  "id": -49,
+  "phone": "08123456789"
 }
 
 ###

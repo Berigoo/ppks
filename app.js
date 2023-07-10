@@ -47,7 +47,7 @@ app.post('/api/otp', (req, res) => {
         if(req.body.id) {
             res.setHeader('Content-Type', 'application/json');
             pool.getConnection().then((conn) => {
-                var otp = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
+                var otp = (Math.floor(Math.random() * 1000000) + 1000000).toString().substring(1);
                 if (req.body.phone) {
                     const sanitized_number = req.body.phone.toString().replace(/[- )(]/g, "");
                     const final_number = `62${sanitized_number.substring(sanitized_number.length - 11)}`;
@@ -55,7 +55,7 @@ app.post('/api/otp', (req, res) => {
                         if (id) {
                             var msg = otp + " Adalah kode konfirmasi Anda.";
                             var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
-                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ?", req.body.id).then((rows) => {
+                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ? && phone= ?", [req.body.id, final_number]).then((rows) => {
                                     if (parseInt(rows[0]['COUNT(1)']) > 0) {
                                         res.json({
                                             'isAccepted': true,
@@ -64,7 +64,7 @@ app.post('/api/otp', (req, res) => {
                                         })
                                         return conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]);
                                     }else {
-                                        conn.query("INSERT INTO user VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, final_number, otp]).then(() => {
+                                        conn.query("INSERT INTO user(id, device_id, phone, otp, token, state, ts) VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, final_number, otp]).then(() => {
                                             res.json({
                                                 'isAccepted': true,
                                                 'info': "Message has been sent " + otp,
@@ -115,23 +115,20 @@ app.post('/api/otpverify', (req, res)=>{
     if(iswwclientConnect){
         var ret = {};
         ret.token = '-';
-        ret.phone = '-';
+        const sanitized_number = req.body.phone.toString().replace(/[- )(]/g, "");
+        const final_number = `62${sanitized_number.substring(sanitized_number.length - 11)}`;
+        ret.phone = final_number
         if(req.body.id && req.body.otp) {
             res.setHeader('Content-Type', 'application/json');
             pool.getConnection().then((conn) => {
-                conn.query("SELECT * FROM user WHERE otp= ? && device_id= ? ORDER BY ts DESC", [req.body.otp, req.body.id]).then((rows) => {
+                conn.query("SELECT * FROM user WHERE otp= ? && device_id= ? && phone= ? ORDER BY ts DESC", [req.body.otp, req.body.id, final_number]).then((rows) => {
                     if (rows[0] !== undefined) {
                         ret.phone = rows[0].phone;
                         // const delta = deltaTs(conn, rows[0].id);
-                        if(rows[0].token === null){
-                            const user = { device_id: rows[0].device_id, phone: rows[0].phone };
-                            const token = jwt.sign(user, process.env.TOKEN_SECRET);
-                            ret.token = token;
-                            return conn.query("UPDATE user SET otp='-', state=1, token= ? WHERE device_id=?", [token , rows[0].device_id])
-                        }else {
-                            ret.token = rows[0].token;
-                            return conn.query("UPDATE user SET otp='-', state=1 WHERE device_id=?", rows[0].device_id)
-                        }
+                        const user = { device_id: rows[0].device_id, phone: rows[0].phone };
+                        const token = jwt.sign(user, process.env.TOKEN_SECRET);
+                        ret.token = token;
+                        return conn.query("DELETE FROM user WHERE device_id= ? && phone= ?", [req.body.id , final_number])
                     } else {
                         ret.isAccepted = false;
                         ret.info = "Otp not match or id not found";
@@ -139,12 +136,10 @@ app.post('/api/otpverify', (req, res)=>{
                         conn.end();
                     }
                 }).then((rows) => {
-                    if (rows) {
                         ret.isAccepted = true;
                         ret.info = "User has been verified";
                         ret.statusCode = 2
                         conn.end();
-                    }
                 }).then(() => {
                     res.json({
                         "isAccepted": ret.isAccepted,
