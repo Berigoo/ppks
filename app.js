@@ -55,14 +55,21 @@ app.post('/api/otp', (req, res) => {
                         if (id) {
                             var msg = otp + " Adalah kode konfirmasi Anda.";
                             var sendMsg = wwclient.sendMessage(id._serialized, msg).then((msg) => {
-                                conn.query("SELECT COUNT(1) FROM user WHERE device_id= ? && phone= ?", [req.body.id, final_number]).then((rows) => {
+                                conn.query("SELECT COUNT(1), (CURRENT_TIMESTAMP -  ts) AS delta FROM user WHERE device_id= ? && phone= ?", [req.body.id, final_number]).then((rows) => {
                                     if (parseInt(rows[0]['COUNT(1)']) > 0) {
-                                        res.json({
-                                            'isAccepted': true,
-                                            'info': "Message has been sent " + otp,
-                                            'status-code': 1
-                                        })
-                                        return conn.query("UPDATE user SET otp= ? WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]);
+                                        if(rows[0].delta > 60) {
+                                            res.json({
+                                                'isAccepted': true,
+                                                'info': "Message has been sent " + otp,
+                                                'status-code': 1
+                                            })
+                                            return conn.query("UPDATE user SET otp= ?, ts= CURRENT_TIMESTAMP WHERE device_id= ? && phone= ?", [otp, req.body.id, final_number]);
+                                        }else{
+                                            res.json({
+                                                'isAccepted': false,
+                                                'info': 'In cooldown'
+                                            })
+                                        }
                                     }else {
                                         conn.query("INSERT INTO user(id, device_id, phone, otp, token, state, ts) VALUES(NULL, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP)", [req.body.id, final_number, otp]).then(() => {
                                             res.json({
