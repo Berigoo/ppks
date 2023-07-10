@@ -128,26 +128,20 @@ app.post('/api/otpverify', (req, res)=>{
                         const user = { device_id: rows[0].device_id, phone: rows[0].phone };
                         const token = jwt.sign(user, process.env.TOKEN_SECRET);
                         ret.token = token;
-                        return conn.query("DELETE FROM user WHERE device_id= ? && phone= ?", [req.body.id , final_number])
+                        conn.query("DELETE FROM user WHERE device_id= ? && phone= ?", [req.body.id , final_number]).then((rows)=>{
+                            ret.isAccepted = true;
+                            ret.info = "User has been verified";
+                            ret.statusCode = 2
+                            return res.json(ret);
+                            conn.end();
+                        })
                     } else {
                         ret.isAccepted = false;
                         ret.info = "Otp not match or id not found";
                         ret.statusCode = -3
                         conn.end();
+                        return res.json(ret);
                     }
-                }).then((rows) => {
-                        ret.isAccepted = true;
-                        ret.info = "User has been verified";
-                        ret.statusCode = 2
-                        conn.end();
-                }).then(() => {
-                    res.json({
-                        "isAccepted": ret.isAccepted,
-                        "info": ret.info,
-                        "token": ret.token,
-                        "phone": ret.phone,
-                        "status-code": ret.statusCode
-                    })
                 }).catch(err => {
                     console.log(err);
                     conn.end().then(() => {
